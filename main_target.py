@@ -4,7 +4,7 @@
 Satellite orbit and attitude, original: H. Kataza, edit by Y. Kasagi and Codex CLI (2025)
 
     usage:
-        OrbitAttitude.py [-h|--help] (-s|-a) -p <day_offset> -w <days> [-o] [-t <target_name>] [-m <minutes>]
+        main_target.py [-h|--help] (-s|-a) -p <day_offset> -w <days> [-o] [-t <target_name>] [-m <minutes>]
 
     options:
         -h --help       show this help message and exit

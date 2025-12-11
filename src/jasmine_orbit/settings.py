@@ -8,6 +8,6 @@ THERMAL_SUN_ANGLE_RANGE_DEG = (45, 135)
 THERMAL_Az_MAX_DEG = 90
 THERMAL_Zn_MAX_DEG = 24
 
-TARGET_CATALOG_PATH = Path("./data/exoplanet_target.csv")
-OUTPUT_DIR = Path("./output/")
+TARGET_CATALOG_PATH = Path("/Users/yuikasagi/Jasmine/analysis/jasmine_orbit/data/exoplanet_target.csv")
+OUTPUT_DIR = Path("/Users/yuikasagi/Jasmine/analysis/jasmine_orbit/output/")
 # ----------------
