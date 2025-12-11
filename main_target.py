@@ -36,14 +36,17 @@ from jasmine_orbit.settings import (
 )
 from jasmine_orbit.OrbitAttitude import (
     prepare_orbit, 
+    horizon_angle,
     detect_ascending_nodes, 
     load_target_coordinates, 
     orbattitude,
     compute_fraction_between_nodes,
     compute_thermal_fraction_per_orbit,
+    thermal_input_per_orbit
 )
 from jasmine_orbit.GraphOrbit import plot_orbit_3d, plot_frac_themalfeasibility
 
+import matplotlib.pyplot as plt
 def main_target(args):
     """Main function to process satellite orbit and attitude data for a specific target.
     Args:
@@ -78,12 +81,17 @@ def main_target(args):
     mask_thermal = (np.abs(toSatAz) <= THERMAL_Az_MAX_DEG) & (toSatZn >= THERMAL_Zn_MAX_DEG) 
     thermal_indices = np.where(mask_thermal)[0]
 
+    # define thermal input with depending on phi(Az), theta(Zn)
+    alpha = horizon_angle()
+    thermal_input = np.cos(np.deg2rad(toSatAz)) * np.cos(np.pi - (alpha+np.deg2rad(toSatZn)))
+
     times_array = np.asarray(times)
     index_an = np.where(np.isin(times_array, np.asarray(time_an)))[0]
 
     # Calculate fractions
     frac_obs = compute_fraction_between_nodes(index_an, index_obs)
     frac_obs_thermal = compute_thermal_fraction_per_orbit(index_an, thermal_indices)
+    sum_thermal_input = thermal_input_per_orbit(index_an, thermal_indices, thermal_input)
 
     BarytoSat_ecliptic = SkyCoord(CartesianRepresentation(BarytoSat.T * u.AU), frame=ICRS()).transform_to('barycentricmeanecliptic').cartesian.xyz.T.value
 
@@ -102,8 +110,9 @@ def main_target(args):
         outfile_frac_thermal = None
     
     #plot_angle_target(times, SatTgt, SatprojTgt, SatZSun, index_obs, index_an, frac_obs, target_name, outfile_angle_fig)
-    plot_orbit_3d(BarytoSat_ecliptic, toTgt, mask_obs, mask_thermal, outfile=outfile_orbit3d_fig)
-    plot_frac_themalfeasibility(times, index_an, frac_obs, frac_obs_thermal, target_name, outfile=outfile_frac_thermal)
+    #plot_orbit_3d(BarytoSat_ecliptic, toTgt, mask_obs, mask_thermal, outfile=outfile_orbit3d_fig)
+    #plot_frac_themalfeasibility(times, index_an, frac_obs, frac_obs_thermal, target_name, outfile=outfile_frac_thermal)
+    plot_frac_themalfeasibility(times, index_an, frac_obs, sum_thermal_input, target_name, outfile=outfile_frac_thermal)
 
 
 if __name__ == '__main__':

@@ -13,6 +13,7 @@ import numpy as np
 from astropy.time import Time
 from astropy.coordinates import get_sun, SkyCoord, TEME, GCRS
 import astropy.units as u
+import astropy.constants as c
 import quaternion
 import pandas as pd
 from pathlib import Path
@@ -46,6 +47,10 @@ def prepare_orbit(args):
     )
     return results, inclination_deg, (tle1, tle2), start_date, days_calc, altitude
 
+def horizon_angle():
+    altitude = DEFAULT_ALTITUDE_KM
+    R_earth = c.R_earth.to("km").value
+    return np.arcsin(R_earth / (R_earth + altitude))
 
 def load_target_coordinates(target_name: str, catalog_path: Path = TARGET_CATALOG_PATH) -> Tuple[SkyCoord, pd.DataFrame]:
     """Load target coordinates from a catalog CSV file.
@@ -165,6 +170,26 @@ def compute_thermal_fraction_per_orbit(index_an: np.ndarray, thermal_indices: np
         len_thermal = len(np.intersect1d(orbit_range, thermal_indices))
         fractions.append(len_thermal / len_orb)
     return fractions
+
+import matplotlib.pyplot as plt
+def thermal_input_per_orbit(index_an: np.ndarray, thermal_indices: np.array, thermal_input: np.ndarray) -> List[float]:
+    input_per_orbit = []
+    for start, end in zip(index_an[:-1], index_an[1:]):
+        if end <= start:
+            input_per_orbit.append(0.0)
+            continue
+        orbit_range = np.arange(start, end)
+        if len(orbit_range) == 0:
+            input_per_orbit.append(0.0)
+            continue
+        len_orb = len(orbit_range) 
+        if len_orb == 0:
+            input_per_orbit.append(0.0)
+            continue
+        input_ind_tmp = np.intersect1d(orbit_range, thermal_indices)
+        input_sum = np.sum(thermal_input[input_ind_tmp])
+        input_per_orbit.append(input_sum)
+    return input_per_orbit
 
 def compute_visibility(lat, lon, results, time_an):
     """Compute visibility fraction for a given latitude and longitude.

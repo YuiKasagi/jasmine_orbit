@@ -223,19 +223,39 @@ def hide_axis3d(ax):
 def plot_frac_themalfeasibility(times, index_an, frac_obs, frac_obs_thermal, target_name, outfile):
     times_an = np.array(times)[index_an[:-1]]
     orbit_num = range(len(times_an))
+    time_span = (times[-1] - times[0]).days
 
     mask_obs_orb = np.array(frac_obs)>0
 
     fig, ax1 = plt.subplots(figsize=(10,5))
     ax1.plot(orbit_num, frac_obs_thermal, '-')
+    ax1.axhline(8, orbit_num[0], orbit_num[-1], ls="dashed", lw=1, color="tab:red", zorder=0)
 
     for start, end in get_true_segments(~mask_obs_orb):
         ax1.axvspan(start, end, color="grey", alpha=0.2)
+    
+    if time_span == 89.: # 1シーズン分の図を作るとき、始め・中・終わりに星印
+        idx = np.where(mask_obs_orb)[0]
+        if len(idx) > 0:
+            first = idx[0]
+            last  = idx[-1]
+            middle = idx[len(idx) // 2]
+        else:
+            first = middle = last = None 
+        for idx_tmp in [first, middle, last]:
+            frac_tmp = frac_obs_thermal[idx_tmp]
+            if frac_tmp>8:
+                plot_args = {"marker": "*", "mfc": "yellow", "mec": "tab:blue", "ms": 20}
+            else:
+                plot_args = {"marker": "*", "mfc": "tab:red", "mec": "red", "ms": 20}
+            ax1.plot(orbit_num[idx_tmp], frac_tmp, **plot_args)
 
     ax1.set_title(f"{target_name}, {times[0].strftime('%Y-%m-%d')} → {times[-1].strftime('%Y-%m-%d')} ({(times[-1] - times[0]).days + 1} days)")
     ax1.set_xlabel("Orbit number from {}".format(times[0].strftime("%Y-%m-%d")))
-    ax1.set_ylabel("Fraction of thermal unfeasible time\nper orbit")
-    ax1.set(ylim=(0,1.), xlim=(orbit_num[0], orbit_num[-1]))
+    #ax1.set_ylabel("Fraction of thermal unfeasible time\nper orbit")
+    ax1.set_ylabel("Sum of cos$\phi$ during a single orbit")
+    ax1.set(xlim=(orbit_num[0], orbit_num[-1]))
+    #ax1.set(ylim=(0,1.))
 
     ax2 = ax1.twiny()
     ax2.plot(times_an, frac_obs_thermal, '-', alpha=0.)
