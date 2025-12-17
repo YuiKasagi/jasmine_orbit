@@ -4,42 +4,49 @@ developer: Yui Kasagi
 
 ## Introduction
 
-ターゲットの visibility チェック用ツール
+`Jasmine_orbit` is a tool for checking the visibility of a target and estimating thermal input conditions.
 
-基本的には RPR-SJ4B0509 (by H. Kataza) を流用しています。
+This project is largely based on RPR-SJ4B0509 (by H. Kataza).
 
-非観測時の姿勢は RPR-SJ512017B を参照し、`OrbitAttitude.py` の対応する部分を修正しました。
+For attitude during non-observation periods, RPR-SJ512017B was referenced, and the corresponding logic in OrbitAttitude.py was modified accordingly.
+
+For more details, please refer to the document ``JASMINE-C2-TN-YKS-20251217-01-thermal_input'' on the JASMINE Wiki (accessible to JASMINE team members only).
 
 ## Usage
 
-### 設定
+### Configuration
 
-各種閾値、アウトプットディレクトリへのパスは `src/jasmine_orbit/settings.py` で管理しています。
-適宜書き換えて使用してください。
+All major parameters such as thresholds and output directory paths are defined in: `src/jasmine_orbit/settings.py` 
 
-### 放射板への熱入力量の推測
+Edit this file before running calculations to suit your requirements.
 
-例）
+### Estimating Thermal Input to the Radiator Panel
 
-春分 (-s) から 45日後 (-p 45.0) を開始日として、90日間 (-w 90.) GJ 3929 (-t GJ 3929) の計算を実施。結果を図・データとしてアウトプットする(-o)。
+#### Example
+
+The following command performs a calculation for GJ 3929, starting 45 days after the vernal equinox, running for 90 days, and outputs both figures and data:
 
 ```
 python main_target.py -s -p 45.0 -w 90. -o -t GJ 3929 
 ```
 
-オプション解説：
+#### Command-line Options
 
 ```
 usage:
     main_target.py [-h|--help] (-s|-a) -p <day_offset> -w <days> [-o] [-t <target_name>] [-m <minutes>]
 
 options:
-    -h --help       show this help message and exit
-    -s              春分点を基準
-    -a              秋分点を基準
-    -p <day_offset> 基準日からの計算開始日(この日を含む)
-    -w <days>       計算期間(日)
-    -o              グラフ出力(True or False)
+    -h --help           show this help message and exit
+    -s                  use the vernal equinox as the reference date
+    -a                  use the autumnal equinox as the reference date
+    -p <day_offset>     calculation start day offset from the reference date (inclusive)
+    -w <days>           calculation duration in days
+    -o                  enable graph output (True or False)
     -t <target_name>    target name
-    -m <minutes>   time step in minutes [default: 1]
+    -m <minutes>        time step in minutes [default: 1]
 ```
+
+## License
+This project is released under the MIT License.
+See the LICENSE file for full license text.
