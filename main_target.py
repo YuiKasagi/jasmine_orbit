@@ -17,9 +17,6 @@ Satellite orbit and attitude, original: H. Kataza, edit by Y. Kasagi and Codex C
         -m <minutes>   time step in minutes [default: 1]
 """
 
-import sys
-sys.path.insert(0, "/Users/yuikasagi/Jasmine/analysis/jasmine_orbit/src")
-
 from docopt import docopt
 import time
 import numpy as np
@@ -41,7 +38,7 @@ import seaborn as sns
 sns.set_context('talk')
 
 # load config
-from .config.settings_example import CONFIG
+from config.settings_example import CONFIG
 
 def main_target(args):
     """Main function to process satellite orbit and attitude data for a specific target.

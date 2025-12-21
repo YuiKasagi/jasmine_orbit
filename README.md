@@ -12,13 +12,51 @@ For attitude during non-observation periods, RPR-SJ512017B was referenced, and t
 
 For more details, please refer to the document ``JASMINE-C2-TN-YKS-20251217-01-thermal_input'' on the JASMINE Wiki (accessible to JASMINE team members only).
 
+## Installation
+
+### Requirements
+- Python 3.9 or later
+
+### Install from GitHub
+
+You can install the package directly from GitHub using `pip`:
+
+```bash
+pip install git+https://github.com/YuiKasagi/jasmine_orbit.git
+```
+Alternatively, clone the repository and install it locally:
+```bash
+git clone https://github.com/YuiKasagi/jasmine_orbit.git
+cd jasmine_orbit
+pip install .
+```
+
 ## Usage
 
 ### Configuration
 
-All major parameters such as thresholds and output directory paths are defined in: `src/jasmine_orbit/settings.py` 
+This package ships with **built-in default parameters**.  
+All default values (thresholds, angle limits, etc.) are defined in:
 
-Edit this file before running calculations to suit your requirements.
+- `src/jasmine_orbit/defaults.py`
+
+You **do not need to edit** files under `src/` for normal use.
+
+#### User configuration (recommended)
+
+If you want to customize parameters (e.g., output directories, thresholds, catalog paths), create your own configuration file in your working directory (or anywhere you like), for example:
+
+- `config/example_settings.py`
+
+Then pass your config to functions/classes that support it:
+
+```python
+from config.example_settings import CONFIG
+from jasmine_orbit.OrbitAttitude import calc_attitude
+
+result = calc_attitude(..., config=CONFIG)
+```
+This approach keeps the library code immutable while allowing each user/project to manage settings in a reproducible way.
 
 ### Estimating Thermal Input to the Radiator Panel
 

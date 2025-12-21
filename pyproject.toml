@@ -20,6 +20,8 @@ dependencies = [
     "sgp4",
     "numpy-quaternion",
     "matplotlib",
+    "cartopy", 
+    "pyvista", 
 ]
 
 [project.optional-dependencies]
@@ -27,12 +29,6 @@ dev = [
   "pytest>=7",
   "ruff>=0.5",
   "black>=24",
-]
-
-viz = [
-    "cartopy", 
-    "pyvista", 
-    "seaborn"
 ]
 
 [tool.setuptools]
