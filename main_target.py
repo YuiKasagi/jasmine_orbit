@@ -25,15 +25,6 @@ import time
 import numpy as np
 from astropy.coordinates import SkyCoord, Galactic, CartesianRepresentation, ICRS
 import astropy.units as u
-from jasmine_orbit.settings import (
-    DEFAULT_ALTITUDE_KM,
-    OBSERVATION_ANGLE_MAX_DEG,
-    THERMAL_SUN_ANGLE_RANGE_DEG,
-    THERMAL_Az_MAX_DEG,
-    THERMAL_Zn_MAX_DEG,
-    TARGET_CATALOG_PATH,
-    OUTPUT_DIR,
-)
 from jasmine_orbit.OrbitAttitude import (
     prepare_orbit, 
     horizon_angle,
@@ -46,14 +37,19 @@ from jasmine_orbit.OrbitAttitude import (
 )
 from jasmine_orbit.GraphOrbit import plot_orbit_3d, plot_frac_themalfeasibility
 
-import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set_context('talk')
+
+# load config
+from .config.settings_example import CONFIG
+
 def main_target(args):
     """Main function to process satellite orbit and attitude data for a specific target.
     Args:
         args: Command-line arguments.
     """
     # Get orbit data
-    results, inclination_deg, (tle1, tle2), start_date, days_calc, altitude = prepare_orbit(args)
+    results, inclination_deg, (tle1, tle2), start_date, days_calc, altitude = prepare_orbit(args, config=CONFIG)
 
     time_an = detect_ascending_nodes(results)
 
@@ -64,25 +60,25 @@ def main_target(args):
         skycoord_target = SkyCoord(l=0 * u.degree, b=0 * u.degree, frame=Galactic)
     else:
         try:
-            skycoord_target, target_data = load_target_coordinates(target_name)
+            skycoord_target, target_data = load_target_coordinates(target_name, config=CONFIG)
         except ValueError as exc:
             print(exc)
             return
         print(target_data)
 
     times, Sat, toSun, toTgt, toSat, SatTgt, SunTgt, SatX, SatY, SatZ,\
-        SatZSun, SatXSun, SatYSun, SatprojTgt, toSatZn, toSatAz, BarytoSat = orbattitude(results, skycoord_target)
+        SatZSun, SatXSun, SatYSun, SatprojTgt, toSatZn, toSatAz, BarytoSat = orbattitude(results, skycoord_target, config=CONFIG)
 
     # Jadge observation and thermal feasibility
-    sun_min, sun_max = THERMAL_SUN_ANGLE_RANGE_DEG
-    mask_obs = (SatTgt <= OBSERVATION_ANGLE_MAX_DEG) & (sun_min <= SatZSun) & (SatZSun <= sun_max)
+    sun_min, sun_max = CONFIG.THERMAL_SUN_ANGLE_RANGE_DEG
+    mask_obs = (SatTgt <= CONFIG.OBSERVATION_ANGLE_MAX_DEG) & (sun_min <= SatZSun) & (SatZSun <= sun_max)
     index_obs = np.where(mask_obs)[0]
 
-    mask_thermal = (np.abs(toSatAz) <= THERMAL_Az_MAX_DEG) & (toSatZn >= THERMAL_Zn_MAX_DEG) 
+    mask_thermal = (np.abs(toSatAz) <= CONFIG.THERMAL_Az_MAX_DEG) & (toSatZn >= CONFIG.THERMAL_Zn_MAX_DEG) 
     thermal_indices = np.where(mask_thermal)[0]
 
     # define thermal input with depending on phi(Az), theta(Zn)
-    alpha = horizon_angle()
+    alpha = horizon_angle(config=CONFIG)
     thermal_input = np.cos(np.deg2rad(toSatAz)) * np.cos(np.pi - (alpha+np.deg2rad(toSatZn)))
 
     times_array = np.asarray(times)
@@ -96,11 +92,11 @@ def main_target(args):
     BarytoSat_ecliptic = SkyCoord(CartesianRepresentation(BarytoSat.T * u.AU), frame=ICRS()).transform_to('barycentricmeanecliptic').cartesian.xyz.T.value
 
     if args['-o']:
-        outfile_angle_fig = f"{OUTPUT_DIR}/figs/{target_name}_{times[0].strftime('%Y-%m-%d')}_angles.png"  
-        outfile_angle_data = f"{OUTPUT_DIR}/orbit/{target_name}_{times[0].strftime('%Y-%m-%d')}_angles.npz"  
-        outfile_orbit3d_fig = f"{OUTPUT_DIR}/figs/{target_name}_{times[0].strftime('%Y-%m-%d')}_orbit3d.png"
-        outfile_orbit3d_data = f"{OUTPUT_DIR}/orbit/{target_name}_{times[0].strftime('%Y-%m-%d')}_orbit3d.npz"
-        outfile_frac_thermal = f"{OUTPUT_DIR}/figs/{target_name}_{times[0].strftime('%Y-%m-%d')}_frac_thermal.png"
+        outfile_angle_fig = f"{CONFIG.OUTPUT_DIR}/figs/{target_name}_{times[0].strftime('%Y-%m-%d')}_angles.png"  
+        outfile_angle_data = f"{CONFIG.OUTPUT_DIR}/orbit/{target_name}_{times[0].strftime('%Y-%m-%d')}_angles.npz"  
+        outfile_orbit3d_fig = f"{CONFIG.OUTPUT_DIR}/figs/{target_name}_{times[0].strftime('%Y-%m-%d')}_orbit3d.png"
+        outfile_orbit3d_data = f"{CONFIG.OUTPUT_DIR}/orbit/{target_name}_{times[0].strftime('%Y-%m-%d')}_orbit3d.npz"
+        outfile_frac_thermal = f"{CONFIG.OUTPUT_DIR}/figs/{target_name}_{times[0].strftime('%Y-%m-%d')}_frac_thermal.png"
 
         np.savez(outfile_angle_data, SatTgt=SatTgt, SatZSun=SatZSun, SatAz=toSatAz, times_array=times_array)
         np.savez(outfile_orbit3d_data, BarytoSat_ecliptic=BarytoSat_ecliptic, toTgt=toTgt, mask_obs=mask_obs, mask_thermal=mask_thermal)

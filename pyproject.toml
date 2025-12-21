@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jasmine-orbit"
+version = "0.1.0"
+description = "A tool for checking target visibility and estimating thermal input conditions (JASMINE)."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+  { name = "Yui Kasagi" }
+]
+
+dependencies = [
+    "numpy",
+    "pandas",
+    "astropy",
+    "sgp4",
+    "numpy-quaternion",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7",
+  "ruff>=0.5",
+  "black>=24",
+]
+
+viz = [
+    "cartopy", 
+    "pyvista", 
+    "seaborn"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

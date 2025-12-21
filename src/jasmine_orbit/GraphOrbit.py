@@ -7,8 +7,6 @@ import matplotlib.dates as mdates
 from matplotlib.legend_handler import HandlerTuple
 
 from cartopy.feature.nightshade import Nightshade # failed to use with cfeature (?)
-import seaborn as sns
-sns.set_context('talk')
 
 def get_true_segments(mask: np.ndarray):
     """

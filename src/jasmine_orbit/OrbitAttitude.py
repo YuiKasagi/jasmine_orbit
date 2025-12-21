@@ -2,13 +2,7 @@ from datetime import timedelta
 from jasmine_orbit.OrbitCalc import satellite_position
 from jasmine_orbit.OrbitTool import setdate
 from jasmine_orbit.ViewOrbit import normalize, view_sat
-from jasmine_orbit.settings import (
-    DEFAULT_ALTITUDE_KM,
-    OBSERVATION_ANGLE_MAX_DEG,
-    THERMAL_SUN_ANGLE_RANGE_DEG,
-    THERMAL_Az_MAX_DEG,
-    TARGET_CATALOG_PATH,
-)
+from jasmine_orbit.defaults import Config, DEFAULT_CONFIG
 import numpy as np
 from astropy.time import Time
 from astropy.coordinates import get_sun, SkyCoord, TEME, GCRS
@@ -30,7 +24,7 @@ warnings.filterwarnings('ignore', category=AstropyWarning)
 Comparator = Callable[[np.ndarray], np.ndarray]
 
 
-def prepare_orbit(args):
+def prepare_orbit(args, config: Config = DEFAULT_CONFIG):
     """Prepare satellite orbit data based on command-line arguments.
     Args:
         args: Command-line arguments.
@@ -39,7 +33,7 @@ def prepare_orbit(args):
         Tuple containing orbit results, inclination in degrees, TLE lines, start date, calculation days, and altitude.
     """
     start_date, days_calc, end_date = setdate(args)
-    altitude = DEFAULT_ALTITUDE_KM
+    altitude = config.ALTITUDE_KM
     print(f"衛星高度: {altitude} km")
     time_step = timedelta(minutes=float(args['-m']))
     results, inclination_deg, tle1, tle2 = satellite_position(
@@ -47,12 +41,12 @@ def prepare_orbit(args):
     )
     return results, inclination_deg, (tle1, tle2), start_date, days_calc, altitude
 
-def horizon_angle():
-    altitude = DEFAULT_ALTITUDE_KM
+def horizon_angle(config: Config = DEFAULT_CONFIG):
+    altitude = config.ALTITUDE_KM
     R_earth = c.R_earth.to("km").value
     return np.arcsin(R_earth / (R_earth + altitude))
 
-def load_target_coordinates(target_name: str, catalog_path: Path = TARGET_CATALOG_PATH) -> Tuple[SkyCoord, pd.DataFrame]:
+def load_target_coordinates(target_name: str, config: Config = DEFAULT_CONFIG):
     """Load target coordinates from a catalog CSV file.
     Args:
         target_name: Name of the target to search for.
@@ -61,10 +55,10 @@ def load_target_coordinates(target_name: str, catalog_path: Path = TARGET_CATALO
     Returns:
         Tuple containing the SkyCoord of the target and the corresponding DataFrame row.
     """
-    catalog = pd.read_csv(catalog_path)
+    catalog = pd.read_csv(config.TARGET_CATALOG_PATH)
     target_data = catalog.loc[catalog["name"] == target_name]
     if target_data.empty:
-        raise ValueError(f"Target '{target_name}' not found in {catalog_path}")
+        raise ValueError(f"Target '{target_name}' not found in {config.TARGET_CATALOG_PATH}")
     row = target_data.iloc[0]
     coord = SkyCoord(ra=row["ra"] * u.degree, dec=row["dec"] * u.degree, frame="icrs")
     return coord, target_data
@@ -191,7 +185,7 @@ def thermal_input_per_orbit(index_an: np.ndarray, thermal_indices: np.array, the
         input_per_orbit.append(input_sum)
     return input_per_orbit
 
-def compute_visibility(lat, lon, results, time_an):
+def compute_visibility(lat, lon, results, time_an, config: Config = DEFAULT_CONFIG):
     """Compute visibility fraction for a given latitude and longitude.
     Args:
         lat: Latitude in degrees.
@@ -205,8 +199,8 @@ def compute_visibility(lat, lon, results, time_an):
     skycoord_target = SkyCoord(lon=lon * u.degree, lat=lat * u.degree, frame="geocentricmeanecliptic")
     try:
         times, _, _, _, _, SatTgt, _, _, _, _, SatZSun, _, _, _, _, _, _ = orbattitude(results, skycoord_target)
-        sun_min, sun_max = THERMAL_SUN_ANGLE_RANGE_DEG
-        mask_obs = (SatTgt <= OBSERVATION_ANGLE_MAX_DEG) & (sun_min <= SatZSun) & (SatZSun <= sun_max)
+        sun_min, sun_max = config.THERMAL_SUN_ANGLE_RANGE_DEG
+        mask_obs = (SatTgt <= config.OBSERVATION_ANGLE_MAX_DEG) & (sun_min <= SatZSun) & (SatZSun <= sun_max)
         index_obs = np.where(mask_obs)[0]
 
         times_array = np.asarray(times)
@@ -299,7 +293,7 @@ def init_angles(n_results):
     toSatAz = np.empty(n_results)  # 地心から衛星方向 の方位角, 衛星XYZ座標 (-180-180 deg)
     return SatZSun, SatXSun, SatYSun, SatX, SatY, SatZ, toSatZn, toSatAz
 
-def orbattitude_old(results, skycoord_target):
+def orbattitude_old(results, skycoord_target, config: Config = DEFAULT_CONFIG):
     """Calculate satellite attitude and related angles for given orbit results and target coordinates.
     (Based on RPR-SJ4B0509)
     Args:
@@ -319,7 +313,7 @@ def orbattitude_old(results, skycoord_target):
         Z = toSun[i]
         X = normalize(toTgt[i] - np.dot(toTgt[i], Z) * Z)
 
-        if SatTgt[i] <= OBSERVATION_ANGLE_MAX_DEG:
+        if SatTgt[i] <= config.OBSERVATION_ANGLE_MAX_DEG:
             SatZ[i] = toTgt[i]
         else:
             if np.abs(np.dot(toTgt[i], X)) < np.finfo(float).eps:
@@ -354,7 +348,7 @@ def orbattitude_old(results, skycoord_target):
     return times, Sat, toSun, toTgt, toSat, SatTgt, SunTgt, SatX, SatY, SatZ,\
         SatZSun, SatXSun, SatYSun, SatprojTgt, toSatZn, toSatAz, BarytoSat
 
-def orbattitude(results, skycoord_target):
+def orbattitude(results, skycoord_target, config: Config = DEFAULT_CONFIG):
     """Calculate satellite attitude and related angles for given orbit results and target coordinates.
     (Based on RPR-SJ512017B)
 
@@ -371,8 +365,8 @@ def orbattitude(results, skycoord_target):
 
     times, Sat, toSun, toTgt, toSat, SatTgt, SunTgt, SatprojTgt, BarytoSat, pos_gcrs = compute_vectors_angles_arr(results, skycoord_target)
 
-    is_obs = SatTgt <= OBSERVATION_ANGLE_MAX_DEG
-    orbit_cycles = find_orbit_cycles_from_SatTgt(SatTgt, OBSERVATION_ANGLE_MAX_DEG)
+    is_obs = SatTgt <= config.OBSERVATION_ANGLE_MAX_DEG
+    orbit_cycles = find_orbit_cycles_from_SatTgt(SatTgt, config.OBSERVATION_ANGLE_MAX_DEG)
 
     for (s_obs, e_obs, s_next) in orbit_cycles:
         # この周回のインデックス範囲（観測＋非観測）
@@ -420,7 +414,7 @@ def orbattitude(results, skycoord_target):
                 X_tmp = toTgt[i] - np.dot(toTgt[i], Z) * Z
                 X = normalize(X_tmp)
 
-                if SatTgt[i] <= OBSERVATION_ANGLE_MAX_DEG:
+                if SatTgt[i] <= config.OBSERVATION_ANGLE_MAX_DEG:
                     SatZ[i] = toTgt[i]
                 else:
                     # ここは観測中だけど SatTgt>lim というレアケースなので、
