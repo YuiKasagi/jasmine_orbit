@@ -4,6 +4,7 @@ from jasmine_orbit.OrbitTool import setdate
 from jasmine_orbit.ViewOrbit import normalize, view_sat
 from jasmine_orbit.defaults import Config, DEFAULT_CONFIG
 import numpy as np
+from scipy.integrate import trapezoid
 from astropy.time import Time
 from astropy.coordinates import get_sun, SkyCoord, TEME, GCRS
 import astropy.units as u
@@ -64,11 +65,10 @@ def load_target_coordinates(target_name: str, config: Config = DEFAULT_CONFIG):
     return coord, target_data
 
 def angle_between(a, b):
-    """Calculate the angle in degrees between two vectors a and b."""
-    dot = np.sum(a * b, axis=-1)
+    # a,b: (N,3)
+    dot = np.einsum("ij,ij->i", a, b)
     dot = np.clip(dot, -1.0, 1.0)
-    result = np.degrees(np.arccos(dot))
-    return result.item() if result.ndim == 0 else result
+    return np.degrees(np.arccos(dot))
 
 def _first_index_after(series: np.ndarray, start: int, comparator: Comparator) -> Optional[int]:
     """Find the first index in 'series' after 'start' where 'comparator' returns True."""
@@ -165,8 +165,7 @@ def compute_thermal_fraction_per_orbit(index_an: np.ndarray, thermal_indices: np
         fractions.append(len_thermal / len_orb)
     return fractions
 
-import matplotlib.pyplot as plt
-def thermal_input_per_orbit(index_an: np.ndarray, thermal_indices: np.array, thermal_input: np.ndarray) -> List[float]:
+def thermal_input_per_orbit(index_an: np.ndarray, thermal_indices: np.array, thermal_input: np.ndarray, dt: float) -> List[float]:
     input_per_orbit = []
     for start, end in zip(index_an[:-1], index_an[1:]):
         if end <= start:
@@ -181,8 +180,8 @@ def thermal_input_per_orbit(index_an: np.ndarray, thermal_indices: np.array, the
             input_per_orbit.append(0.0)
             continue
         input_ind_tmp = np.intersect1d(orbit_range, thermal_indices)
-        input_sum = np.sum(thermal_input[input_ind_tmp])
-        input_per_orbit.append(input_sum)
+        input_integral = trapezoid(thermal_input[input_ind_tmp].astype(float), dx=dt)
+        input_per_orbit.append(input_integral)
     return input_per_orbit
 
 def compute_visibility(lat, lon, results, time_an, config: Config = DEFAULT_CONFIG):
@@ -293,62 +292,7 @@ def init_angles(n_results):
     toSatAz = np.empty(n_results)  # 地心から衛星方向 の方位角, 衛星XYZ座標 (-180-180 deg)
     return SatZSun, SatXSun, SatYSun, SatX, SatY, SatZ, toSatZn, toSatAz
 
-def orbattitude_old(results, skycoord_target, config: Config = DEFAULT_CONFIG):
-    """Calculate satellite attitude and related angles for given orbit results and target coordinates.
-    (Based on RPR-SJ4B0509)
-    Args:
-        results: Satellite orbit results.
-        skycoord_target: SkyCoord of the target.
-    
-    Returns:
-        Tuple containing times, satellite positions, various angles, and direction vectors.
-    """
-    # 計算点における各種の角度
-    n_results = len(results)
-    SatZSun, SatXSun, SatYSun, SatX, SatY, SatZ, toSatZn, toSatAz = init_angles(n_results)
-
-    times, Sat, toSun, toTgt, toSat, SatTgt, SunTgt, SatprojTgt, BarytoSat, pos_gcrs = compute_vectors_angles_arr(results, skycoord_target)
-
-    for i, result in enumerate(results):
-        Z = toSun[i]
-        X = normalize(toTgt[i] - np.dot(toTgt[i], Z) * Z)
-
-        if SatTgt[i] <= config.OBSERVATION_ANGLE_MAX_DEG:
-            SatZ[i] = toTgt[i]
-        else:
-            if np.abs(np.dot(toTgt[i], X)) < np.finfo(float).eps:
-                ZZ = toSun[i]
-            else:
-                if np.dot(toTgt[i], Z) < 0:
-                    ZZ = normalize(-toTgt[i] + X)
-                else:
-                    ZZ = normalize(toTgt[i] - X)
-            XX = normalize(toTgt[i] - np.dot(toTgt[i], ZZ) * ZZ)
-            YY = np.cross(ZZ, XX)
-            theta = np.arctan2(np.dot(YY, toSat[i]), np.dot(XX, toSat[i]))
-            if theta < 0 and theta > -np.pi / 2:
-                theta = -np.pi / 2
-            if theta > 0 and theta < np.pi / 2:
-                theta = np.pi / 2
-            rot_quat = quaternion.from_rotation_vector(2 * (theta - np.pi / 2) * ZZ)
-            SatZ[i] = quaternion.as_rotation_matrix(rot_quat).dot(toTgt[i])
-        SatY[i] = -normalize(np.cross(toSun[i], SatZ[i]))
-        SatX[i] = np.cross(SatY[i], SatZ[i])
-        SatZSun[i] = angle_between(SatZ[i], toSun[i])
-        SatXSun[i] = angle_between(SatX[i], toSun[i])
-        SatYSun[i] = angle_between(SatY[i], toSun[i])
-        toSatZn[i] = angle_between(toSat[i], SatZ[i])
-        tx = toSat[i] @ SatX[i]    # toSat の SatX 方向成分
-        ty = toSat[i] @ SatY[i]    # toSat の SatY 方向成分
-
-        theta_rad = np.arctan2(ty, tx)
-        theta_deg = np.degrees(theta_rad)
-        toSatAz[i] = theta_deg
-
-    return times, Sat, toSun, toTgt, toSat, SatTgt, SunTgt, SatX, SatY, SatZ,\
-        SatZSun, SatXSun, SatYSun, SatprojTgt, toSatZn, toSatAz, BarytoSat
-
-def orbattitude(results, skycoord_target, config: Config = DEFAULT_CONFIG):
+def orbattitude(results, skycoord_target, config=DEFAULT_CONFIG):
     """Calculate satellite attitude and related angles for given orbit results and target coordinates.
     (Based on RPR-SJ512017B)
 
@@ -359,35 +303,42 @@ def orbattitude(results, skycoord_target, config: Config = DEFAULT_CONFIG):
     Returns:
         Tuple containing times, satellite positions, various angles, and direction vectors.
     """
-    # 計算点における各種の角度
     n_results = len(results)
-    SatZSun, SatXSun, SatYSun, SatX, SatY, SatZ, toSatZn, toSatAz = init_angles(n_results)
 
-    times, Sat, toSun, toTgt, toSat, SatTgt, SunTgt, SatprojTgt, BarytoSat, pos_gcrs = compute_vectors_angles_arr(results, skycoord_target)
+    # 計算点における各種の角度
+    times, Sat, toSun, toTgt, toSat, SatTgt, SunTgt, SatprojTgt, BarytoSat, pos_gcrs = \
+        compute_vectors_angles_arr(results, skycoord_target)
 
-    is_obs = SatTgt <= config.OBSERVATION_ANGLE_MAX_DEG
+    # 出力配列
+    SatX = np.empty((n_results, 3), dtype=np.float64)
+    SatY = np.empty((n_results, 3), dtype=np.float64)
+    SatZ = np.empty((n_results, 3), dtype=np.float64)
+
+    SatZSun = np.empty(n_results, dtype=np.float64)
+    SatXSun = np.empty(n_results, dtype=np.float64)
+    SatYSun = np.empty(n_results, dtype=np.float64)
+    toSatZn = np.empty(n_results, dtype=np.float64)
+    toSatAz = np.empty(n_results, dtype=np.float64)
+
+    is_obs = (SatTgt <= config.OBSERVATION_ANGLE_MAX_DEG)
     orbit_cycles = find_orbit_cycles_from_SatTgt(SatTgt, config.OBSERVATION_ANGLE_MAX_DEG)
 
     for (s_obs, e_obs, s_next) in orbit_cycles:
-        # この周回のインデックス範囲（観測＋非観測）
         idx_seg = np.arange(s_obs, s_next + 1)
+        seg_is_obs = is_obs[idx_seg]
 
-        # 観測インデックス / 非観測インデックス
+        # ---- 観測/非観測中心の代表点 ----
         idx_obs_seg = np.arange(s_obs, e_obs + 1)
         idx_nonobs_seg = np.arange(e_obs + 1, s_next + 1)
-        if len(idx_nonobs_seg) == 0:
-            # ほぼ全周観測になってしまった場合のフォールバック
+        if idx_nonobs_seg.size == 0:
             idx_nonobs_seg = np.array([e_obs])
 
-        # 観測中心 / 最終観測 / 非観測中心
-        i_c = idx_obs_seg[len(idx_obs_seg)//2]   # 観測中心
-        i_e = e_obs                              # 最終観測
-        i_n = idx_nonobs_seg[len(idx_nonobs_seg)//2]  # 非観測中心
+        i_c = idx_obs_seg[idx_obs_seg.size // 2]
+        i_e = e_obs
+        i_n = idx_nonobs_seg[idx_nonobs_seg.size // 2]
 
-        # ---- main() の SatXc, SatYc, SatZc, SatZn, tiltAngle, rotdir を計算 ----
         Satc = pos_gcrs[i_c]
         Satn = pos_gcrs[i_n]
-
         toObj_c = toTgt[i_c]
         toSun_c = toSun[i_c]
 
@@ -396,8 +347,7 @@ def orbattitude(results, skycoord_target, config: Config = DEFAULT_CONFIG):
         SatXc = np.cross(SatYc, SatZc)
 
         SatZn = normalize(Satn)
-        SatYn = normalize(np.cross(SatZn, toSun_c))
-        SatXn = np.cross(SatYn, SatZn)
+        # SatXn/SatYnは tiltAngle計算に直接使ってないので省略可
 
         rotdir = np.dot(toSun_c, toObj_c)
 
@@ -405,65 +355,69 @@ def orbattitude(results, skycoord_target, config: Config = DEFAULT_CONFIG):
         Zno = normalize(quaternion.as_rotation_matrix(qrot_pi).dot(SatZc))
         tiltAngle = -np.arccos(np.clip(np.dot(Zno, SatZn), -1.0, 1.0))
 
-        # ---- この周回の各時刻に対して姿勢を決定 ----
-        for i in idx_seg:
-            if is_obs[i]:
-                # ===== 観測中：ターゲット指向 =====
-                # （既存 orbitattitude の観測側ロジックをそのまま使ってよい）
-                Z = toSun[i]
-                X_tmp = toTgt[i] - np.dot(toTgt[i], Z) * Z
-                X = normalize(X_tmp)
+        # =========================
+        # 観測点をまとめて計算
+        # =========================
+        obs_idx = idx_seg[seg_is_obs]
+        if obs_idx.size > 0:
+            SatZ[obs_idx] = toTgt[obs_idx]
+            SatY[obs_idx] = -normalize(np.cross(toSun[obs_idx], SatZ[obs_idx]))
+            SatX[obs_idx] = np.cross(SatY[obs_idx], SatZ[obs_idx])
+            # 必要なら正規化（数値誤差対策）
+            SatX[obs_idx] = normalize(SatX[obs_idx])
+            SatY[obs_idx] = normalize(SatY[obs_idx])
+            SatZ[obs_idx] = normalize(SatZ[obs_idx])
 
-                if SatTgt[i] <= config.OBSERVATION_ANGLE_MAX_DEG:
-                    SatZ[i] = toTgt[i]
-                else:
-                    # ここは観測中だけど SatTgt>lim というレアケースなので、
-                    # 必要に応じて処理を書く。単純には SatZ=toTgt で良い。
-                    SatZ[i] = toTgt[i]
+        # =========================
+        # 非観測点をまとめて計算
+        # =========================
+        nonobs_idx = idx_seg[~seg_is_obs]
+        if nonobs_idx.size > 0:
+            denom = max(s_next - i_e, 1)
+            s = (nonobs_idx - i_e) / denom
+            s = np.clip(s, 0.0, 1.0)
 
-                SatY[i] = -normalize(np.cross(toSun[i], SatZ[i]))
-                SatX[i] = np.cross(SatY[i], SatZ[i])
+            # 太陽軸回転（0 → -2π）
+            phi = -2.0 * np.pi * s  # (M,)
+            rotvec_sun = phi[:, None] * toSun_c[None, :]  # (M,3)
+            q_sun = quaternion.from_rotation_vector(rotvec_sun)
+            R_sun = quaternion.as_rotation_matrix(q_sun)  # (M,3,3)
 
-            else:
-                # ===== 非観測中：main() と同じ「太陽軸回転 + tilt」 =====
+            X0 = np.einsum("mij,j->mi", R_sun, SatXc)
+            Y0 = np.einsum("mij,j->mi", R_sun, SatYc)
+            Z0 = np.einsum("mij,j->mi", R_sun, SatZc)
 
-                s = (i - i_e) / max(s_next - i_e, 1)
-                s = np.clip(s, 0.0, 1.0)
+            X0 = normalize(X0)
+            Y0 = normalize(Y0)
+            Z0 = normalize(Z0)
 
-                # 太陽軸回転量 (0 → -π rad)
-                phi_i = -2*np.pi * s
-                qrot_sun = quaternion.from_rotation_vector(toSun_c * phi_i)
-                R_sun = quaternion.as_rotation_matrix(qrot_sun)
+            psi = tiltAngle * s
+            if rotdir < 0:
+                psi = -psi
 
-                X0 = normalize(R_sun.dot(SatXc))
-                Y0 = normalize(R_sun.dot(SatYc))
-                Z0 = normalize(R_sun.dot(SatZc))
+            rotvec_tilt = psi[:, None] * Y0  # (M,3)
+            q_tilt = quaternion.from_rotation_vector(rotvec_tilt)
+            R_tilt = quaternion.as_rotation_matrix(q_tilt)  # (M,3,3)
 
-                # tilt 量 psi
-                psi = tiltAngle * s
-                if rotdir < 0:
-                    psi = -psi
+            SatX[nonobs_idx] = normalize(np.einsum("mij,mj->mi", R_tilt, X0))
+            SatZ[nonobs_idx] = normalize(np.einsum("mij,mj->mi", R_tilt, Z0))
+            SatY[nonobs_idx] = Y0  # 既に正規化済み
 
-                qrot_tilt = quaternion.from_rotation_vector(Y0 * psi)
-                R_tilt = quaternion.as_rotation_matrix(qrot_tilt)
+        # =========================
+        # 角度類も seg 全体をまとめて計算
+        # =========================
+        SatZSun[idx_seg] = angle_between(SatZ[idx_seg], toSun[idx_seg])
+        SatXSun[idx_seg] = angle_between(SatX[idx_seg], toSun[idx_seg])
+        SatYSun[idx_seg] = angle_between(SatY[idx_seg], toSun[idx_seg])
+        toSatZn[idx_seg] = angle_between(toSat[idx_seg], SatZ[idx_seg])
 
-                SatX[i] = normalize(R_tilt.dot(X0))
-                SatZ[i] = normalize(R_tilt.dot(Z0))
-                SatY[i] = Y0
+        tx = np.einsum("ij,ij->i", toSat[idx_seg], SatX[idx_seg])
+        ty = np.einsum("ij,ij->i", toSat[idx_seg], SatY[idx_seg])
+        toSatAz[idx_seg] = np.degrees(np.arctan2(ty, tx))
 
-            SatZSun[i] = angle_between(SatZ[i], toSun[i])
-            SatXSun[i] = angle_between(SatX[i], toSun[i])
-            SatYSun[i] = angle_between(SatY[i], toSun[i])
-            toSatZn[i] = angle_between(toSat[i], SatZ[i])
-            tx = toSat[i] @ SatX[i]    # toSat の SatX 方向成分
-            ty = toSat[i] @ SatY[i]    # toSat の SatY 方向成分
-
-            theta_rad = np.arctan2(ty, tx)
-            theta_deg = np.degrees(theta_rad)
-            toSatAz[i] = theta_deg
-
-    return times, Sat, toSun, toTgt, toSat, SatTgt, SunTgt, SatX, SatY, SatZ,\
-        SatZSun, SatXSun, SatYSun, SatprojTgt, toSatZn, toSatAz, BarytoSat
+    return (times, Sat, toSun, toTgt, toSat, SatTgt, SunTgt,
+            SatX, SatY, SatZ, SatZSun, SatXSun, SatYSun, SatprojTgt,
+            toSatZn, toSatAz, BarytoSat)
 
 def find_orbit_cycles_from_SatTgt(SatTgt, obs_max_deg):
     """

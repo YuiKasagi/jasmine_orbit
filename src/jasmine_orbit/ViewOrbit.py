@@ -173,7 +173,7 @@ def normalize_old(v):  # ベクトルの規格化
 
     return v / n
 
-def normalize(v):
-    # v: (..., 3)
+def normalize(v, eps=1e-12):
+    # v: (...,3)
     n = np.linalg.norm(v, axis=-1, keepdims=True)
-    return v / n
+    return v / np.maximum(n, eps)

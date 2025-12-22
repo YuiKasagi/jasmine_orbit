@@ -45,6 +45,8 @@ def main_target(args):
     Args:
         args: Command-line arguments.
     """
+    dt = float(args['-m'])
+
     # Get orbit data
     results, inclination_deg, (tle1, tle2), start_date, days_calc, altitude = prepare_orbit(args, config=CONFIG)
 
@@ -84,7 +86,7 @@ def main_target(args):
     # Calculate fractions
     frac_obs = compute_fraction_between_nodes(index_an, index_obs)
     frac_obs_thermal = compute_thermal_fraction_per_orbit(index_an, thermal_indices)
-    sum_thermal_input = thermal_input_per_orbit(index_an, thermal_indices, thermal_input)
+    sum_thermal_input = thermal_input_per_orbit(index_an, thermal_indices, thermal_input, dt)
 
     BarytoSat_ecliptic = SkyCoord(CartesianRepresentation(BarytoSat.T * u.AU), frame=ICRS()).transform_to('barycentricmeanecliptic').cartesian.xyz.T.value
 
