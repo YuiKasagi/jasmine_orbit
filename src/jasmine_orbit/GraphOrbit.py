@@ -5,6 +5,8 @@ import cartopy.feature as cfeature
 from jasmine_orbit.OrbitCalc import ltan_str
 import matplotlib.dates as mdates
 from matplotlib.legend_handler import HandlerTuple
+import matplotlib.cm as cm
+import healpy as hp
 
 from cartopy.feature.nightshade import Nightshade # failed to use with cfeature (?)
 
@@ -295,6 +297,25 @@ def plot_visibility_mollweide(lon_arr, lat_arr, frac_obs_map, outfile):
     x_ticks = np.radians(np.arange(30, 360, 30)) - np.pi
     ax.set_xticks(x_ticks)
     ax.set_xticklabels(x_labels, color='grey')
+    if outfile:
+        plt.savefig(outfile, bbox_inches="tight")
+    plt.show()
+
+def map_visibility(m, times, outfile):
+    plt.figure(figsize=(15,10))
+    hp.mollview(m, cmap=cm.magma, title=f"{times[0].strftime('%Y-%m-%d')} → {times[-1].strftime('%Y-%m-%d')} ({(times[-1] - times[0]).days + 1} days)", coord=['E', 'C'], notext=True, hold=True)#, rot=(180, 0, 0))
+    hp.graticule()
+
+    # 銀河中心の位置 (銀河中心の位置は銀河座標で l = 0, b = 0)
+    l_gal_center = 0.0
+    b_gal_center = 0.0
+
+    hp.projscatter(l_gal_center, b_gal_center, lonlat=True, coord=['G','C'], s=100, c='red', marker='*', label='Galactic Center')
+    hp.projscatter(l_gal_center+180, -b_gal_center, lonlat=True, coord=['G','C'], s=100, c='blue', marker='*')
+
+    plt.legend(loc="lower left")
+
+    plt.gca().invert_xaxis()
     if outfile:
         plt.savefig(outfile, bbox_inches="tight")
     plt.show()

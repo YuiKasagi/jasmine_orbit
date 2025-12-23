@@ -20,23 +20,18 @@ Satellite orbit and attitude, original: H. Kataza, edit by Y. Kasagi and Codex C
 from docopt import docopt
 import time
 import numpy as np
-from astropy.coordinates import SkyCoord, Galactic, CartesianRepresentation, ICRS
+from astropy.coordinates import SkyCoord
 import astropy.units as u
 import healpy as hp
 from jasmine_orbit.OrbitAttitude import (
     prepare_orbit, 
     horizon_angle,
     detect_ascending_nodes, 
-    load_target_coordinates, 
     orbattitude,
-    compute_fraction_between_nodes,
-    compute_thermal_fraction_per_orbit,
     thermal_input_per_orbit
 )
-from jasmine_orbit.GraphOrbit import plot_orbit_3d, plot_frac_themalfeasibility
+from jasmine_orbit.GraphOrbit import map_visibility
 
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 import seaborn as sns
 sns.set_context('talk')
 
@@ -62,10 +57,12 @@ def _one_pix(results, skycoord, index_an, alpha,
     visible = (np.asarray(sum_thermal_input) < th_thermal_input)
     return int(np.sum(visible))
 
-def main_target(args):
-    """Main function to process satellite orbit and attitude data for a specific target.
+def main_target(args, nside=8, th_thermal_input=8.):
+    """Main function to plot the number of visible orbits.
     Args:
         args: Command-line arguments.
+        nside: Resolution of healpix
+        th_thermal_input: threshold for sum of the thrmal input
     """
     dt = float(args['-m'])
 
@@ -76,7 +73,6 @@ def main_target(args):
     time_an_arr = np.asarray(time_an)
 
     # パラメータ設定
-    nside = 8  # 解像度を設定
     npix = hp.nside2npix(nside)
 
     m = np.zeros(npix)  # 初期化
@@ -95,7 +91,6 @@ def main_target(args):
     zn_min  = CONFIG.THERMAL_Zn_MAX_DEG
 
     alpha = horizon_angle(config=CONFIG)
-    th_thermal_input = 8. # threshould
 
     # index_an を1回だけ確定（timesが共通前提）
     times0, *_ = orbattitude(results, skycoord_targets[0], config=CONFIG)
@@ -103,56 +98,16 @@ def main_target(args):
     index_an = np.where(np.isin(times_array, time_an_arr))[0]
 
     m = np.asarray(
-    Parallel(n_jobs=-1, backend="loky", batch_size=8)(
+    Parallel(n_jobs=-2, backend="loky", batch_size="auto")(
         delayed(_one_pix)(results, skycoord, index_an, alpha,
                           sun_min, sun_max, obs_lim, az_lim, zn_min, th_thermal_input, dt)
         for skycoord in skycoord_targets
     ),
     dtype=np.int32
     )
-    """
-    for ipix, skycoord in enumerate(skycoord_targets):
-        times, Sat, toSun, toTgt, toSat, SatTgt, SunTgt, SatX, SatY, SatZ,\
-            SatZSun, SatXSun, SatYSun, SatprojTgt, toSatZn, toSatAz, BarytoSat = orbattitude_fast(results, skycoord, config=CONFIG)
 
-        # Jadge observation and thermal feasibility
-        mask_obs = (SatTgt <= obs_lim) & (sun_min <= SatZSun) & (SatZSun <= sun_max)
-
-        mask_thermal = (np.abs(toSatAz) <= az_lim) & (toSatZn >= zn_min) 
-
-        mask_visible = mask_obs & mask_thermal
-        visible_indices = np.flatnonzero(mask_visible)
-
-        # define thermal input with depending on phi(Az), theta(Zn)
-        thermal_input = np.cos(np.deg2rad(toSatAz)) * np.cos(np.pi - (alpha+np.deg2rad(toSatZn)))
-
-        # Calculate fractions
-        sum_thermal_input = thermal_input_per_orbit(index_an, visible_indices, thermal_input)
-
-        # set threshould
-        visible = (np.array(sum_thermal_input) < th_thermal_input)
-        visible_orbit_num = int(np.sum(visible))
-
-        # count visible days
-        m[ipix] = visible_orbit_num
-    """
     # map
-    plt.figure(figsize=(15,10))
-    hp.mollview(m, cmap=cm.magma, title="年間観測可能日数", coord=['E', 'C'], notext=True, hold=True)#, rot=(180, 0, 0))
-    hp.graticule()
-
-    # 銀河中心の位置 (銀河中心の位置は銀河座標で l = 0, b = 0)
-    l_gal_center = 0.0
-    b_gal_center = 0.0
-
-    hp.projscatter(l_gal_center, b_gal_center, lonlat=True, coord=['G','C'], s=100, c='red', marker='*', label='Galactic Center')
-    hp.projscatter(l_gal_center+180, -b_gal_center, lonlat=True, coord=['G','C'], s=100, c='blue', marker='*')
-
-    plt.legend(loc="lower left")
-
-    plt.gca().invert_xaxis()
-    plt.show()
-
+    map_visibility(m, times_array, outfile=None)
 
 if __name__ == '__main__':
     start = time.time()
