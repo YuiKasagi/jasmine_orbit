@@ -99,22 +99,19 @@ def main_target(args):
 
         np.savez(outfile_angle_data, SatTgt=SatTgt, SatZSun=SatZSun, SatAz=toSatAz, times_array=times_array)
         np.savez(outfile_orbit3d_data, BarytoSat_ecliptic=BarytoSat_ecliptic, toTgt=toTgt, mask_obs=mask_obs, mask_thermal=mask_thermal)
-    else:
-        outfile_angle_fig = None
-        outfile_orbit3d_fig = None
-        outfile_frac_thermal = None
-    
-    #plot_angle_target(times, SatTgt, SatprojTgt, SatZSun, index_obs, index_an, frac_obs, target_name, outfile_angle_fig)
-    #plot_orbit_3d(BarytoSat_ecliptic, toTgt, mask_obs, mask_thermal, outfile=outfile_orbit3d_fig)
-    #plot_frac_themalfeasibility(times, index_an, frac_obs, frac_obs_thermal, target_name, outfile=outfile_frac_thermal)
-    plot_frac_themalfeasibility(times, index_an, frac_obs, sum_thermal_input, target_name, outfile=outfile_frac_thermal)
 
+        #plot_angle_target(times, SatTgt, SatprojTgt, SatZSun, index_obs, index_an, frac_obs, target_name, outfile_angle_fig)
+        #plot_orbit_3d(BarytoSat_ecliptic, toTgt, mask_obs, mask_thermal, outfile=outfile_orbit3d_fig)
+        #plot_frac_themalfeasibility(times, index_an, frac_obs, frac_obs_thermal, target_name, outfile=outfile_frac_thermal)
+        plot_frac_themalfeasibility(times, index_an, frac_obs, sum_thermal_input, target_name, outfile=outfile_frac_thermal)
+
+    return times, index_an, frac_obs, sum_thermal_input
 
 if __name__ == '__main__':
     start = time.time()
 
     args = docopt(__doc__)
-    main_target(args)
+    times, index_an, frac_obs, sum_thermal_input = main_target(args)
 
     end = time.time()
     print("Elapsed time: {:.2f} seconds".format(end - start))

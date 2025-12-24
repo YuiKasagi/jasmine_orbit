@@ -20,6 +20,7 @@ Satellite orbit and attitude, original: H. Kataza, edit by Y. Kasagi and Codex C
 from docopt import docopt
 import time
 import numpy as np
+import pandas as pd
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 import healpy as hp
@@ -48,7 +49,7 @@ def _one_pix(results, skycoord, index_an, alpha,
 
     mask_obs = (SatTgt <= obs_lim) & (sun_min <= SatZSun) & (SatZSun <= sun_max)
     mask_thermal = (np.abs(toSatAz) <= az_lim) & (toSatZn >= zn_min)
-    mask_visible = mask_obs #& mask_thermal
+    mask_visible = mask_obs & mask_thermal
     visible_idx = np.flatnonzero(mask_visible)
 
     thermal_input = np.cos(np.deg2rad(toSatAz)) * np.cos(np.pi - (alpha + np.deg2rad(toSatZn)))
@@ -112,8 +113,13 @@ def main_visibility_map(args, nside=8, th_thermal_input=8.):
     else:
         outfile_map = None
 
+    # 系外惑星ターゲット
+    df_target = pd.read_csv(CONFIG.TARGET_CATALOG_PATH)
+    target_plot = ["LTT 1445 A", "GJ 357", "TRAPPIST-1", "GJ 486", "GJ 3929"]
+    df_target_plot = df_target[df_target["name"].isin(target_plot)]
+
     # map
-    map_visibility(m, times_array, outfile=outfile_map)
+    map_visibility(m, times_array, df_target=df_target_plot, outfile=outfile_map)
 
 import contextlib
 from tqdm import tqdm

@@ -6,7 +6,10 @@ from jasmine_orbit.OrbitCalc import ltan_str
 import matplotlib.dates as mdates
 from matplotlib.legend_handler import HandlerTuple
 import matplotlib.cm as cm
+from matplotlib.colors import Normalize
 import healpy as hp
+from astropy import units as u
+from astropy.coordinates import SkyCoord
 
 from cartopy.feature.nightshade import Nightshade # failed to use with cfeature (?)
 
@@ -253,7 +256,7 @@ def plot_frac_themalfeasibility(times, index_an, frac_obs, frac_obs_thermal, tar
     ax1.set_title(f"{target_name}, {times[0].strftime('%Y-%m-%d')} → {times[-1].strftime('%Y-%m-%d')} ({(times[-1] - times[0]).days + 1} days)")
     ax1.set_xlabel("Orbit number from {}".format(times[0].strftime("%Y-%m-%d")))
     #ax1.set_ylabel("Fraction of thermal unfeasible time\nper orbit")
-    ax1.set_ylabel("Sum of cos$\phi$ during a single orbit")
+    ax1.set_ylabel("Thermal input during a single orbit")
     ax1.set(xlim=(orbit_num[0], orbit_num[-1]))
     #ax1.set(ylim=(0,1.))
 
@@ -301,10 +304,22 @@ def plot_visibility_mollweide(lon_arr, lat_arr, frac_obs_map, outfile):
         plt.savefig(outfile, bbox_inches="tight")
     plt.show()
 
-def map_visibility(m, times, outfile):
+def map_visibility(m, times, df_target=None, outfile=None):
     plt.figure(figsize=(15,10))
     hp.mollview(m, cmap=cm.magma, title=f"{times[0].strftime('%Y-%m-%d')} → {times[-1].strftime('%Y-%m-%d')} ({(times[-1] - times[0]).days + 1} days)", coord=['E', 'C'], notext=True, hold=True)#, rot=(180, 0, 0))
     hp.graticule()
+
+    # 系外惑星ターゲット
+    if df_target is not None:
+        ra_target = df_target["ra"]
+        dec_target = df_target["dec"]
+        c_target = SkyCoord(ra=ra_target.values*u.degree, dec=dec_target.values*u.degree, frame='icrs')
+        theta_target = np.pi/2 - c_target.dec.rad  # Decからthetaに変換（赤緯を天頂角に）
+        phi_target = c_target.ra.rad  # RAはそのままphiとして使う
+
+        norm = Normalize(vmin=0, vmax=40)
+
+        hp.projscatter(theta_target, phi_target, lonlat=False, c=df_target["JASMINE S/N"], cmap=cm.seismic, norm=norm, s=50, edgecolor='k',coord=['C'])#, rot=(0,0,180))
 
     # 銀河中心の位置 (銀河中心の位置は銀河座標で l = 0, b = 0)
     l_gal_center = 0.0
