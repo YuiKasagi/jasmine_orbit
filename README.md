@@ -1,9 +1,5 @@
 # Jasmine_orbit
 
-developer: Yui Kasagi
-
-## Introduction
-
 `Jasmine_orbit` is a tool for checking the visibility of a target and estimating thermal input conditions.
 
 This project is largely based on RPR-SJ4B0509 (by H. Kataza).
@@ -12,7 +8,7 @@ For attitude during non-observation periods, RPR-SJ512017B was referenced, and t
 
 For more details, please refer to the document ``JASMINE-C2-TN-YKS-20251217-01-thermal_input'' on the JASMINE Wiki (accessible to JASMINE team members only).
 
-## Installation
+## 📦 Installation
 
 ### Requirements
 - Python 3.9 or later
@@ -31,9 +27,9 @@ cd jasmine_orbit
 pip install .
 ```
 
-## Usage
+## 🌱 Usage
 
-### Configuration
+### 🔧 Configuration
 
 This package ships with **built-in default parameters**.  
 All default values (thresholds, angle limits, etc.) are defined in:
@@ -58,15 +54,21 @@ result = calc_attitude(..., config=CONFIG)
 ```
 This approach keeps the library code immutable while allowing each user/project to manage settings in a reproducible way.
 
-### Estimating Thermal Input to the Radiator Panel
+### ⭐️ Estimating Thermal Input to the Radiator Panel
 
 #### Example
 
 The following command performs a calculation for GJ 3929, starting 45 days after the vernal equinox, running for 90 days, and outputs both figures and data:
 
 ```
-python main_target.py -s -p 45.0 -w 90. -o -t GJ 3929 
+python main_target.py -s -p 45.0 -w 90. -o -t "GJ 3929" 
 ```
+
+The output figure looks like the following:
+
+<img src="output/figs/GJ 3929_2030-05-03_frac_thermal.png" alt="Example themal input estimation" width="600">
+
+The horizontal axis shows the orbit number (with dates on the top axis), and the vertical axis shows the heat input metric integrated over one orbit.
 
 #### Command-line Options
 
@@ -84,6 +86,29 @@ options:
     -t <target_name>    target name
     -m <minutes>        time step in minutes [default: 1]
 ```
+
+### 👀 Visibility Map
+
+#### Example
+
+The following command performs a calculation starting 45 days *before* the vernal equinox, running for 90 days, with a time step of 9 minutes, and outputs the resulting figures:
+
+```
+python main_target.py -s -p -45.0 -w 90. -m 9 -o 
+```
+
+Please note that this calculation requires significant CPU resources and may take a long time (>5min.) to complete.
+You can reduce the computational cost by adjusting the time step and/or the HEALPix resolution (nside, default: 8).
+
+The output figure looks like the following:
+
+<img src="output/figs/90days_from2030-02-02_visibilitymap.png" alt="Example visibility map" width="600">
+
+In this map, a region is defined as “visible” when it is observable and the thermal input to the radiator during a single orbit is small.
+The color map indicates the number of orbits for which each region is visible.
+The figure is shown in equatorial coordinates.
+The marked star positions correspond to the Galactic center and its counterpart (the opposite direction).
+Darker regions indicate areas with fewer visible orbits, while brighter regions represent areas that are visible throughout all seasons.
 
 ## License
 This project is released under the MIT License.

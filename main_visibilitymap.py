@@ -48,7 +48,7 @@ def _one_pix(results, skycoord, index_an, alpha,
 
     mask_obs = (SatTgt <= obs_lim) & (sun_min <= SatZSun) & (SatZSun <= sun_max)
     mask_thermal = (np.abs(toSatAz) <= az_lim) & (toSatZn >= zn_min)
-    mask_visible = mask_obs & mask_thermal
+    mask_visible = mask_obs #& mask_thermal
     visible_idx = np.flatnonzero(mask_visible)
 
     thermal_input = np.cos(np.deg2rad(toSatAz)) * np.cos(np.pi - (alpha + np.deg2rad(toSatZn)))
@@ -57,7 +57,7 @@ def _one_pix(results, skycoord, index_an, alpha,
     visible = (np.asarray(sum_thermal_input) < th_thermal_input)
     return int(np.sum(visible))
 
-def main_target(args, nside=8, th_thermal_input=8.):
+def main_visibility_map(args, nside=8, th_thermal_input=8.):
     """Main function to plot the number of visible orbits.
     Args:
         args: Command-line arguments.
@@ -139,7 +139,7 @@ if __name__ == '__main__':
     start = time.time()
 
     args = docopt(__doc__)
-    main_target(args)
+    main_visibility_map(args)
 
     end = time.time()
     print("Elapsed time: {:.2f} seconds".format(end - start))
