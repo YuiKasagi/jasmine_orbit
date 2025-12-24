@@ -1,3 +1,11 @@
+import warnings
+from erfa import ErfaWarning
+from astropy.utils.exceptions import AstropyWarning
+
+# ErfaWarning と AstropyWarning を非表示にする
+warnings.filterwarnings("ignore", category=ErfaWarning)
+warnings.filterwarnings("ignore", category=AstropyWarning)
+
 from datetime import timedelta
 from jasmine_orbit.OrbitCalc import satellite_position
 from jasmine_orbit.OrbitTool import setdate
@@ -13,13 +21,6 @@ import quaternion
 import pandas as pd
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
-
-
-# ErfaWarning と AstropyWarning を非表示にする
-import warnings
-from astropy.utils.exceptions import ErfaWarning, AstropyWarning
-warnings.filterwarnings('ignore', category=ErfaWarning)
-warnings.filterwarnings('ignore', category=AstropyWarning)
 
 
 Comparator = Callable[[np.ndarray], np.ndarray]

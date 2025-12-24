@@ -1,18 +1,20 @@
 #from astropy.utils.iers import conf
 #conf.auto_max_age = None
 
+import warnings
+from erfa import ErfaWarning
+from astropy.utils.exceptions import AstropyWarning
+
+# ErfaWarning と AstropyWarning を非表示にする
+warnings.filterwarnings("ignore", category=ErfaWarning)
+warnings.filterwarnings("ignore", category=AstropyWarning)
+
 import numpy as np
 from sgp4.earth_gravity import wgs84
 from sgp4.api import Satrec, jday
 from astropy.time import Time
 from astropy.coordinates import TEME, CartesianRepresentation, ITRS, get_sun
 from astropy import units
-import warnings
-from astropy.utils.exceptions import ErfaWarning, AstropyWarning
-
-# ErfaWarning と AstropyWarning を非表示にする
-warnings.filterwarnings('ignore', category=ErfaWarning)
-warnings.filterwarnings('ignore', category=AstropyWarning)
 
 # 衛星の基準時(epoch)と昇交点地方時の設定
 epoch, tle_epoch = Time('2030-01-01 12:00:00', format='iso', scale='utc'), "30001.50000000"

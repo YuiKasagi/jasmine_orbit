@@ -97,17 +97,43 @@ def main_target(args, nside=8, th_thermal_input=8.):
     times_array = np.asarray(times0)
     index_an = np.where(np.isin(times_array, time_an_arr))[0]
 
-    m = np.asarray(
-    Parallel(n_jobs=-2, backend="loky", batch_size="auto")(
-        delayed(_one_pix)(results, skycoord, index_an, alpha,
-                          sun_min, sun_max, obs_lim, az_lim, zn_min, th_thermal_input, dt)
-        for skycoord in skycoord_targets
-    ),
-    dtype=np.int32
-    )
+    with tqdm_joblib(tqdm(total=len(skycoord_targets))) as progress_bar:
+        m = np.asarray(
+        Parallel(n_jobs=-2, backend="loky", batch_size="auto")(
+            delayed(_one_pix)(results, skycoord, index_an, alpha,
+                            sun_min, sun_max, obs_lim, az_lim, zn_min, th_thermal_input, dt)
+            for skycoord in skycoord_targets
+        ),
+        dtype=np.int32
+        )
+
+    if args['-o']:
+        outfile_map = f"{CONFIG.OUTPUT_DIR}/figs/{(times_array[-1] - times_array[0]).days + 1}days_from{times_array[0].strftime('%Y-%m-%d')}_visibilitymap.png"
+    else:
+        outfile_map = None
 
     # map
-    map_visibility(m, times_array, outfile=None)
+    map_visibility(m, times_array, outfile=outfile_map)
+
+import contextlib
+from tqdm import tqdm
+import joblib
+# https://stackoverflow.com/questions/24983493/tracking-progress-of-joblib-parallel-execution/58936697#58936697
+@contextlib.contextmanager
+def tqdm_joblib(tqdm_object):
+    """Context manager to patch joblib to report into tqdm progress bar given as argument"""
+    class TqdmBatchCompletionCallback(joblib.parallel.BatchCompletionCallBack):
+        def __call__(self, *args, **kwargs):
+            tqdm_object.update(n=self.batch_size)
+            return super().__call__(*args, **kwargs)
+
+    old_batch_callback = joblib.parallel.BatchCompletionCallBack
+    joblib.parallel.BatchCompletionCallBack = TqdmBatchCompletionCallback
+    try:
+        yield tqdm_object
+    finally:
+        joblib.parallel.BatchCompletionCallBack = old_batch_callback
+        tqdm_object.close()
 
 if __name__ == '__main__':
     start = time.time()
