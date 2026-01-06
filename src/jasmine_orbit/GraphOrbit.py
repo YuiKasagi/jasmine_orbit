@@ -223,7 +223,7 @@ def hide_axis3d(ax):
     # ただしデータも見えるようにする
     ax.set_axis_off()   # これが一番手っ取り早い（データは表示されます）
 
-def plot_frac_themalfeasibility(times, index_an, frac_obs, frac_obs_thermal, target_name, outfile):
+def plot_frac_themalfeasibility(times, index_an, frac_obs, frac_obs_thermal, target_name, outfile, th_thermal_input=7.):
     times_an = np.array(times)[index_an[:-1]]
     orbit_num = range(len(times_an))
     time_span = (times[-1] - times[0]).days
@@ -232,7 +232,7 @@ def plot_frac_themalfeasibility(times, index_an, frac_obs, frac_obs_thermal, tar
 
     fig, ax1 = plt.subplots(figsize=(10,5))
     ax1.plot(orbit_num, frac_obs_thermal, '-')
-    ax1.axhline(8, orbit_num[0], orbit_num[-1], ls="dashed", lw=1, color="tab:red", zorder=0)
+    ax1.axhline(th_thermal_input, orbit_num[0], orbit_num[-1], ls="dashed", lw=1, color="tab:red", zorder=0)
 
     for start, end in get_true_segments(~mask_obs_orb):
         ax1.axvspan(start, end, color="grey", alpha=0.2)
@@ -247,7 +247,7 @@ def plot_frac_themalfeasibility(times, index_an, frac_obs, frac_obs_thermal, tar
             first = middle = last = None 
         for idx_tmp in [first, middle, last]:
             frac_tmp = frac_obs_thermal[idx_tmp]
-            if frac_tmp>8:
+            if frac_tmp>th_thermal_input:
                 plot_args = {"marker": "*", "mfc": "yellow", "mec": "tab:blue", "ms": 20}
             else:
                 plot_args = {"marker": "*", "mfc": "tab:red", "mec": "red", "ms": 20}
@@ -304,9 +304,11 @@ def plot_visibility_mollweide(lon_arr, lat_arr, frac_obs_map, outfile):
         plt.savefig(outfile, bbox_inches="tight")
     plt.show()
 
-def map_visibility(m, times, df_target=None, outfile=None):
+def map_visibility(m, times, coord_map='C', coord_plot='C', df_target=None, outfile=None):
     plt.figure(figsize=(15,10))
-    hp.mollview(m, cmap=cm.magma, title=f"{times[0].strftime('%Y-%m-%d')} → {times[-1].strftime('%Y-%m-%d')} ({(times[-1] - times[0]).days + 1} days)", coord=['E', 'C'], notext=True, hold=True)#, rot=(180, 0, 0))
+    hp.mollview(m, cmap=cm.magma, 
+                title=f"{times[0].strftime('%Y-%m-%d')} → {times[-1].strftime('%Y-%m-%d')} ({(times[-1] - times[0]).days + 1} days)", 
+                coord=[coord_map, coord_plot], notext=True, hold=True)#, rot=(180, 0, 0))
     hp.graticule()
 
     # 系外惑星ターゲット
@@ -314,19 +316,24 @@ def map_visibility(m, times, df_target=None, outfile=None):
         ra_target = df_target["ra"]
         dec_target = df_target["dec"]
         c_target = SkyCoord(ra=ra_target.values*u.degree, dec=dec_target.values*u.degree, frame='icrs')
-        theta_target = np.pi/2 - c_target.dec.rad  # Decからthetaに変換（赤緯を天頂角に）
-        phi_target = c_target.ra.rad  # RAはそのままphiとして使う
+        if coord_plot == 'C':
+            theta_target = np.pi/2 - c_target.dec.rad  # Decからthetaに変換（赤緯を天頂角に）
+            phi_target = c_target.ra.rad  # RAはそのままphiとして使う
+        elif coord_plot == 'E':
+            c_target_ecl = c_target.transform_to('geocentrictrueecliptic')
+            theta_target = np.pi/2 - c_target_ecl.lat.rad  # 黄緯からthetaに変換（黄緯を天頂角に）
+            phi_target = c_target_ecl.lon.rad  # 黄経はそのままphiとして使う
 
         norm = Normalize(vmin=0, vmax=40)
 
-        hp.projscatter(theta_target, phi_target, lonlat=False, c=df_target["JASMINE S/N"], cmap=cm.seismic, norm=norm, s=50, edgecolor='k',coord=['C'])#, rot=(0,0,180))
+        hp.projscatter(theta_target, phi_target, lonlat=False, c=df_target["JASMINE S/N"], cmap=cm.seismic, norm=norm, s=50, edgecolor='k',coord=[coord_plot])#, rot=(0,0,180))
 
     # 銀河中心の位置 (銀河中心の位置は銀河座標で l = 0, b = 0)
     l_gal_center = 0.0
     b_gal_center = 0.0
 
-    hp.projscatter(l_gal_center, b_gal_center, lonlat=True, coord=['G','C'], s=100, c='red', marker='*', label='Galactic Center')
-    hp.projscatter(l_gal_center+180, -b_gal_center, lonlat=True, coord=['G','C'], s=100, c='blue', marker='*')
+    hp.projscatter(l_gal_center, b_gal_center, lonlat=True, coord=['G', coord_plot], s=100, c='red', marker='*', label='Galactic Center')
+    hp.projscatter(l_gal_center+180, -b_gal_center, lonlat=True, coord=['G', coord_plot], s=100, c='blue', marker='*')
 
     plt.legend(loc="lower left")
 

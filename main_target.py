@@ -32,7 +32,7 @@ from jasmine_orbit.OrbitAttitude import (
     compute_thermal_fraction_per_orbit,
     thermal_input_per_orbit
 )
-from jasmine_orbit.GraphOrbit import plot_orbit_3d, plot_frac_themalfeasibility
+from jasmine_orbit.GraphOrbit import plot_orbit_3d, plot_frac_themalfeasibility, get_true_segments
 
 import seaborn as sns
 sns.set_context('talk')
@@ -50,8 +50,6 @@ def main_target(args):
     # Get orbit data
     results, inclination_deg, (tle1, tle2), start_date, days_calc, altitude = prepare_orbit(args, config=CONFIG)
 
-    time_an = detect_ascending_nodes(results)
-
     # Set target
     target_name = args['-t']
     print(target_name)
@@ -67,6 +65,10 @@ def main_target(args):
 
     times, Sat, toSun, toTgt, toSat, SatTgt, SunTgt, SatX, SatY, SatZ,\
         SatZSun, SatXSun, SatYSun, SatprojTgt, toSatZn, toSatAz, BarytoSat = orbattitude(results, skycoord_target, config=CONFIG)
+    
+    mask_tgt = (SatTgt <= CONFIG.OBSERVATION_ANGLE_MAX_DEG) 
+    obs_start_idx = get_true_segments(mask_tgt)
+    time_obs_start = [times[idx[0]] for idx in obs_start_idx]
 
     # Jadge observation and thermal feasibility
     sun_min, sun_max = CONFIG.THERMAL_SUN_ANGLE_RANGE_DEG
@@ -81,21 +83,21 @@ def main_target(args):
     thermal_input = np.cos(np.deg2rad(toSatAz)) * np.cos(np.pi - (alpha+np.deg2rad(toSatZn)))
 
     times_array = np.asarray(times)
-    index_an = np.where(np.isin(times_array, np.asarray(time_an)))[0]
+    index_obs_start = np.where(np.isin(times_array, np.asarray(time_obs_start)))[0]
 
     # Calculate fractions
-    frac_obs = compute_fraction_between_nodes(index_an, index_obs)
-    frac_obs_thermal = compute_thermal_fraction_per_orbit(index_an, thermal_indices)
-    sum_thermal_input = thermal_input_per_orbit(index_an, thermal_indices, thermal_input, dt)
+    frac_obs = compute_fraction_between_nodes(index_obs_start, index_obs)
+    frac_obs_thermal = compute_thermal_fraction_per_orbit(index_obs_start, thermal_indices)
+    sum_thermal_input = thermal_input_per_orbit(index_obs_start, thermal_indices, thermal_input, dt)
 
     BarytoSat_ecliptic = SkyCoord(CartesianRepresentation(BarytoSat.T * u.AU), frame=ICRS()).transform_to('barycentricmeanecliptic').cartesian.xyz.T.value
 
     if args['-o']:
-        outfile_angle_fig = f"{CONFIG.OUTPUT_DIR}/figs/{target_name}_{times[0].strftime('%Y-%m-%d')}_angles.png"  
-        outfile_angle_data = f"{CONFIG.OUTPUT_DIR}/orbit/{target_name}_{times[0].strftime('%Y-%m-%d')}_angles.npz"  
-        outfile_orbit3d_fig = f"{CONFIG.OUTPUT_DIR}/figs/{target_name}_{times[0].strftime('%Y-%m-%d')}_orbit3d.png"
-        outfile_orbit3d_data = f"{CONFIG.OUTPUT_DIR}/orbit/{target_name}_{times[0].strftime('%Y-%m-%d')}_orbit3d.npz"
-        outfile_frac_thermal = f"{CONFIG.OUTPUT_DIR}/figs/{target_name}_{times[0].strftime('%Y-%m-%d')}_frac_thermal.png"
+        outfile_angle_fig = f"{CONFIG.OUTPUT_DIR}/figs/orbit/{target_name}_{times[0].strftime('%Y-%m-%d')}_angles.png"  
+        outfile_angle_data = f"{CONFIG.OUTPUT_DIR}/data/orbit/{target_name}_{times[0].strftime('%Y-%m-%d')}_angles.npz"  
+        outfile_orbit3d_fig = f"{CONFIG.OUTPUT_DIR}/figs/orbit/{target_name}_{times[0].strftime('%Y-%m-%d')}_orbit3d.png"
+        outfile_orbit3d_data = f"{CONFIG.OUTPUT_DIR}/data/orbit/{target_name}_{times[0].strftime('%Y-%m-%d')}_orbit3d.npz"
+        outfile_frac_thermal = f"{CONFIG.OUTPUT_DIR}/figs/orbit/{target_name}_{times[0].strftime('%Y-%m-%d')}_frac_thermal.png"
 
         np.savez(outfile_angle_data, SatTgt=SatTgt, SatZSun=SatZSun, SatAz=toSatAz, times_array=times_array)
         np.savez(outfile_orbit3d_data, BarytoSat_ecliptic=BarytoSat_ecliptic, toTgt=toTgt, mask_obs=mask_obs, mask_thermal=mask_thermal)
@@ -103,9 +105,9 @@ def main_target(args):
         #plot_angle_target(times, SatTgt, SatprojTgt, SatZSun, index_obs, index_an, frac_obs, target_name, outfile_angle_fig)
         #plot_orbit_3d(BarytoSat_ecliptic, toTgt, mask_obs, mask_thermal, outfile=outfile_orbit3d_fig)
         #plot_frac_themalfeasibility(times, index_an, frac_obs, frac_obs_thermal, target_name, outfile=outfile_frac_thermal)
-        plot_frac_themalfeasibility(times, index_an, frac_obs, sum_thermal_input, target_name, outfile=outfile_frac_thermal)
+        plot_frac_themalfeasibility(times, index_obs_start, frac_obs, sum_thermal_input, target_name, outfile=outfile_frac_thermal)
 
-    return times, index_an, frac_obs, sum_thermal_input
+    return times, index_obs_start, frac_obs, sum_thermal_input
 
 if __name__ == '__main__':
     start = time.time()

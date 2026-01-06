@@ -4,7 +4,7 @@
 Satellite orbit and attitude, original: H. Kataza, edit by Y. Kasagi and Codex CLI (2025)
 
     usage:
-        main_target.py [-h|--help] (-s|-a) -p <day_offset> -w <days> [-o] [-t <target_name>] [-m <minutes>]
+        main_target.py [-h|--help] (-s|-a) -p <day_offset> -w <days> [-o] [-t <target_name>] [-m <minutes>] [-c <coordinate>]
 
     options:
         -h --help       show this help message and exit
@@ -13,15 +13,15 @@ Satellite orbit and attitude, original: H. Kataza, edit by Y. Kasagi and Codex C
         -p <day_offset> 基準日からの計算開始日(この日を含む)
         -w <days>       計算期間(日)
         -o              グラフ出力(True or False)
-        -t <target_name>    target name
         -m <minutes>   time step in minutes [default: 1]
+        -c <coordinate>   座標系 'C' (赤道座標) or 'E' (黄道座標) [default: C]
 """
 
 from docopt import docopt
 import time
 import numpy as np
 import pandas as pd
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import SkyCoord, GeocentricTrueEcliptic
 import astropy.units as u
 import healpy as hp
 from jasmine_orbit.OrbitAttitude import (
@@ -29,9 +29,10 @@ from jasmine_orbit.OrbitAttitude import (
     horizon_angle,
     detect_ascending_nodes, 
     orbattitude,
-    thermal_input_per_orbit
+    thermal_input_per_orbit,
+    compute_fraction_between_nodes
 )
-from jasmine_orbit.GraphOrbit import map_visibility
+from jasmine_orbit.GraphOrbit import map_visibility, get_true_segments
 
 import seaborn as sns
 sns.set_context('talk')
@@ -40,25 +41,33 @@ sns.set_context('talk')
 from config.settings_example import CONFIG
 
 from joblib import Parallel, delayed
-def _one_pix(results, skycoord, index_an, alpha,
+def _one_pix(results, skycoord, times_array, alpha,
              sun_min, sun_max, obs_lim, az_lim, zn_min, th_thermal_input, dt):
 
     times, Sat, toSun, toTgt, toSat, SatTgt, SunTgt, SatX, SatY, SatZ, \
         SatZSun, SatXSun, SatYSun, SatprojTgt, toSatZn, toSatAz, BarytoSat = \
         orbattitude(results, skycoord, config=CONFIG)
+    
+    mask_tgt = (SatTgt <= obs_lim) 
+    obs_start_idx = get_true_segments(mask_tgt)
+    time_obs_start = [times[idx[0]] for idx in obs_start_idx]
+    index_obs_start = np.where(np.isin(times_array, np.asarray(time_obs_start)))[0]
 
-    mask_obs = (SatTgt <= obs_lim) & (sun_min <= SatZSun) & (SatZSun <= sun_max)
-    mask_thermal = (np.abs(toSatAz) <= az_lim) & (toSatZn >= zn_min)
-    mask_visible = mask_obs & mask_thermal
-    visible_idx = np.flatnonzero(mask_visible)
+    mask_obs = (SatTgt <= obs_lim) & (sun_min <= SatZSun) & (SatZSun <= sun_max) #True -> observable
+    obs_idx = np.flatnonzero(mask_obs)
+    frac_obs = compute_fraction_between_nodes(index_obs_start, obs_idx)
+    frac_obs = np.array(frac_obs)
+
+    mask_thermal = (np.abs(toSatAz) <= az_lim) & (toSatZn >= zn_min) #True -> Earth's IR light enters into the radiator
+    thermal_idx = np.flatnonzero(mask_thermal)
 
     thermal_input = np.cos(np.deg2rad(toSatAz)) * np.cos(np.pi - (alpha + np.deg2rad(toSatZn)))
-    sum_thermal_input = thermal_input_per_orbit(index_an, visible_idx, thermal_input, dt)
+    sum_thermal_input = thermal_input_per_orbit(index_obs_start, thermal_idx, thermal_input, dt)
 
-    visible = (np.asarray(sum_thermal_input) < th_thermal_input)
+    visible = (frac_obs > 0) & (np.asarray(sum_thermal_input) < th_thermal_input)
     return int(np.sum(visible))
 
-def main_visibility_map(args, nside=8, th_thermal_input=8.):
+def main_visibility_map(args, nside=8, th_thermal_input=7.):
     """Main function to plot the number of visible orbits.
     Args:
         args: Command-line arguments.
@@ -66,12 +75,10 @@ def main_visibility_map(args, nside=8, th_thermal_input=8.):
         th_thermal_input: threshold for sum of the thrmal input
     """
     dt = float(args['-m'])
+    coord_use = args['-c']
 
     # Get orbit data
     results, inclination_deg, (tle1, tle2), start_date, days_calc, altitude = prepare_orbit(args, config=CONFIG)
-
-    time_an = detect_ascending_nodes(results)
-    time_an_arr = np.asarray(time_an)
 
     # パラメータ設定
     npix = hp.nside2npix(nside)
@@ -82,9 +89,14 @@ def main_visibility_map(args, nside=8, th_thermal_input=8.):
     theta, phi = hp.pix2ang(nside, np.arange(npix))
 
     # HEALPix(theta,phi) -> ICRS (RA,Dec)
-    ra = phi * u.rad
-    dec = (0.5 * np.pi - theta) * u.rad
-    skycoord_targets = SkyCoord(ra=ra, dec=dec, frame="icrs")
+    if coord_use == 'C':
+        ra = phi * u.rad
+        dec = (0.5 * np.pi - theta) * u.rad
+        skycoord_targets = SkyCoord(ra=ra, dec=dec, frame="icrs")
+    elif coord_use == 'E':
+        lon = phi * u.rad                          # 黄経 λ
+        lat = (0.5*np.pi - theta) * u.rad          # 黄緯 β
+        skycoord_targets = SkyCoord(lon=lon, lat=lat, frame=GeocentricTrueEcliptic())
 
     sun_min, sun_max = CONFIG.THERMAL_SUN_ANGLE_RANGE_DEG
     obs_lim = CONFIG.OBSERVATION_ANGLE_MAX_DEG
@@ -96,12 +108,11 @@ def main_visibility_map(args, nside=8, th_thermal_input=8.):
     # index_an を1回だけ確定（timesが共通前提）
     times0, *_ = orbattitude(results, skycoord_targets[0], config=CONFIG)
     times_array = np.asarray(times0)
-    index_an = np.where(np.isin(times_array, time_an_arr))[0]
 
     with tqdm_joblib(tqdm(total=len(skycoord_targets))) as progress_bar:
         m = np.asarray(
         Parallel(n_jobs=-2, backend="loky", batch_size="auto")(
-            delayed(_one_pix)(results, skycoord, index_an, alpha,
+            delayed(_one_pix)(results, skycoord, times_array, alpha,
                             sun_min, sun_max, obs_lim, az_lim, zn_min, th_thermal_input, dt)
             for skycoord in skycoord_targets
         ),
@@ -109,7 +120,9 @@ def main_visibility_map(args, nside=8, th_thermal_input=8.):
         )
 
     if args['-o']:
-        outfile_map = f"{CONFIG.OUTPUT_DIR}/figs/{(times_array[-1] - times_array[0]).days + 1}days_from{times_array[0].strftime('%Y-%m-%d')}_visibilitymap.png"
+        outfile_map = f"{CONFIG.OUTPUT_DIR}/figs/map/{(times_array[-1] - times_array[0]).days + 1}days_from{times_array[0].strftime('%Y-%m-%d')}_visibilitymap_{coord_use}.png"
+        outfile_map_data = f"{CONFIG.OUTPUT_DIR}/data/map/{(times_array[-1] - times_array[0]).days + 1}days_from{times_array[0].strftime('%Y-%m-%d')}_visibilitymap_{coord_use}.fits"
+        hp.write_map(outfile_map_data, m, nest=False, overwrite=True)
     else:
         outfile_map = None
 
@@ -119,7 +132,7 @@ def main_visibility_map(args, nside=8, th_thermal_input=8.):
     df_target_plot = df_target[df_target["name"].isin(target_plot)]
 
     # map
-    map_visibility(m, times_array, df_target=df_target_plot, outfile=outfile_map)
+    map_visibility(m, times_array, coord_map=coord_use, coord_plot=coord_use, df_target=df_target_plot, outfile=outfile_map)
 
 import contextlib
 from tqdm import tqdm
