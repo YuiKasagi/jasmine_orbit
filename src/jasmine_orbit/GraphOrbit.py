@@ -307,7 +307,7 @@ def plot_visibility_mollweide(lon_arr, lat_arr, frac_obs_map, outfile):
 def map_visibility(m, times, coord_map='C', coord_plot='C', df_target=None, outfile=None):
     plt.figure(figsize=(15,10))
     hp.mollview(m, cmap=cm.magma, 
-                title=f"{times[0].strftime('%Y-%m-%d')} → {times[-1].strftime('%Y-%m-%d')} ({(times[-1] - times[0]).days + 1} days)", 
+                title=f"{times[0].strftime('%Y-%m-%d')} → {times[-1].strftime('%Y-%m-%d')} ({(times[-1] - times[0]).days + 1} days), coord={coord_plot}", 
                 coord=[coord_map, coord_plot], notext=True, hold=True)#, rot=(180, 0, 0))
     hp.graticule()
 

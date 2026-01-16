@@ -66,7 +66,7 @@ python main_target.py -s -p 45.0 -w 90. -o -t "GJ 3929"
 
 The output figure looks like the following:
 
-<img src="output/figs/GJ 3929_2030-05-03_frac_thermal.png" alt="Example themal input estimation" width="600">
+<img src="output/figs/orbit/GJ 3929_2030-05-03_frac_thermal.png" alt="Example themal input estimation" width="600">
 
 The horizontal axis shows the orbit number (with dates on the top axis), and the vertical axis shows the heat input metric integrated over one orbit.
 
@@ -91,18 +91,18 @@ options:
 
 #### Example
 
-The following command performs a calculation starting 45 days *before* the vernal equinox, running for 90 days, with a time step of 9 minutes, and outputs the resulting figures:
+The following command performs a calculation starting 45 days *before* the vernal equinox, running for 90 days, with a time step of 2 minutes, and outputs the resulting figures:
 
 ```
-python main_target.py -s -p -45.0 -w 90. -m 9 -o 
+python main_target.py -s -p -45.0 -w 90. -m 2 -o 
 ```
 
-Please note that this calculation requires significant CPU resources and may take a long time (>5min.) to complete.
+Please note that this calculation requires significant CPU resources and may take a long time (>30min.) to complete.
 You can reduce the computational cost by adjusting the time step and/or the HEALPix resolution (nside, default: 8).
 
 The output figure looks like the following:
 
-<img src="output/figs/90days_from2030-02-02_visibilitymap.png" alt="Example visibility map" width="600">
+<img src="output/figs/map/90days_from2030-02-02_visibilitymap_C.png" alt="Example visibility map" width="600">
 
 In this map, a region is defined as “visible” when it is observable and the thermal input to the radiator during a single orbit is small.
 The color map indicates the number of orbits for which each region is visible.
